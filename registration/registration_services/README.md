@@ -1,4 +1,4 @@
-Observation registration services
+Registration services
 =================================
 
 
