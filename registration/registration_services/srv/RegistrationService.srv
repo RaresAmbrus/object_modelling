@@ -1,7 +1,5 @@
-string observation_xml # can be blank
 sensor_msgs/PointCloud2[] rgbd_views
 geometry_msgs/Transform[] rgbd_views_odometry_transforms
 ---
 geometry_msgs/Transform[] rgbd_view_transforms
 int32[] rgbd_view_correspondences
-int32 total_correspondences
