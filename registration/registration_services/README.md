@@ -1,8 +1,8 @@
-Observation registration services
+Registration services
 =================================
 
 
-This package defines a service message, which should be included by the packages using RGBD view registration (thus avoiding a dependency on the registration packages, which in turn depends on CUDA). 
+This package defines a service message, which should be included by the packages using RGBD view registration (thus avoiding a dependency on the registration package, which in turn depends on CUDA). 
 
 
 ####  	RegistrationService
