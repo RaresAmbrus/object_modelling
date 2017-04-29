@@ -1,0 +1,7 @@
+sensor_msgs/PointCloud2[] reference_views
+geometry_msgs/Transform[] reference_views_odometry_transforms
+sensor_msgs/PointCloud2[] rgbd_views
+geometry_msgs/Transform[] rgbd_views_odometry_transforms
+---
+geometry_msgs/Transform[] rgbd_view_transforms
+int32[] rgbd_view_correspondences
