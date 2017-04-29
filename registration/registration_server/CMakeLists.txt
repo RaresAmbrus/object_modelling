@@ -3,12 +3,12 @@ project(registration_server)
 
 set(CMAKE_CXX_FLAGS "-O4 -fPIC -std=c++0x -fpermissive ${CMAKE_CXX_FLAGS}")
 
-find_package(catkin REQUIRED COMPONENTS roscpp rospy std_msgs geometry_msgs sensor_msgs registration_services tf pcl_ros qt_build siftgpu cv_bridge)
+find_package(catkin REQUIRED COMPONENTS roscpp rospy std_msgs geometry_msgs sensor_msgs registration_services tf pcl_ros qt_build siftgpu cv_bridge tf_conversions)
 
 
 catkin_package(
    INCLUDE_DIRS 
-   CATKIN_DEPENDS std_msgs geometry_msgs sensor_msgs registration_services pcl_ros siftgpu cv_bridge
+   CATKIN_DEPENDS std_msgs geometry_msgs sensor_msgs registration_services pcl_ros siftgpu cv_bridge tf_conversions
    DEPENDS libceres-dev suitesparse qt_build libqt4-dev
    LIBRARIES rgbd_view_registration_optimizer
 )
@@ -44,4 +44,12 @@ add_dependencies(rgbd_view_registration_server registration_services_gencpp)
 add_executable(test_rgbd_view_registration test/test_rgbd_view_registration.cpp)
 target_link_libraries(test_rgbd_view_registration ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${QT_LIBRARIES} ${CERES_LIBRARIES} rgbd_view_registration_optimizer)
 add_dependencies(test_rgbd_view_registration registration_services_gencpp)
+
+add_executable(reference_test_rgbd_view_registration test/reference_test_rgbd_view_registration.cpp)
+target_link_libraries(reference_test_rgbd_view_registration ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${QT_LIBRARIES} ${CERES_LIBRARIES} rgbd_view_registration_optimizer)
+add_dependencies(reference_test_rgbd_view_registration registration_services_gencpp)
+
+add_executable(incremental_rgbd_view_registration test/incremental_rgbd_view_registration.cpp)
+target_link_libraries(incremental_rgbd_view_registration ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${QT_LIBRARIES} ${CERES_LIBRARIES} rgbd_view_registration_optimizer)
+add_dependencies(incremental_rgbd_view_registration registration_services_gencpp)
 

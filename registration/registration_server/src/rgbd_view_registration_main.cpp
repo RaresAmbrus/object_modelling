@@ -1,5 +1,6 @@
 #include <ros/ros.h>
 #include <registration_services/RegistrationService.h>
+#include <registration_services/RegistrationServiceWithReference.h>
 
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
@@ -18,9 +19,110 @@ bool optimize(const vector<boost::shared_ptr<pcl::PointCloud<PointType>>>& rgbd_
               std::vector<int>& rgbd_view_constraints,
               vector<tf::StampedTransform>& rgbd_view_registered_transforms);
 
+bool optimizeWithReference(const vector<boost::shared_ptr<pcl::PointCloud<PointType>>>& reference_views,
+                           const vector<tf::StampedTransform>& reference_views_odometry_transforms,
+                           const vector<boost::shared_ptr<pcl::PointCloud<PointType>>>& rgbd_views,
+                           const vector<tf::StampedTransform>& rgbd_views_odometry_transforms,
+                           std::vector<int>& rgbd_view_constraints,
+                           vector<tf::StampedTransform>& rgbd_view_registered_transforms);
+
 void publishRegistrationResult(const vector<boost::shared_ptr<pcl::PointCloud<PointType>>>& rgbd_views,
                                const vector<tf::StampedTransform>& rgbd_views_transforms);
 ros::Publisher pubRegistrationResult;
+
+bool rgbd_view_registration_with_reference_service(
+        registration_services::RegistrationServiceWithReference::Request  &req,
+        registration_services::RegistrationServiceWithReference::Response &res)
+{
+    ROS_INFO("Received an additonal view registration with reference request");
+    ROS_INFO_STREAM("Number of reference views: "<<req.reference_views.size());
+    ROS_INFO_STREAM("Number of reference view transforms: "<<req.reference_views_odometry_transforms.size());
+
+    ROS_INFO_STREAM("Number of views to be registered: "<<req.rgbd_views.size());
+    ROS_INFO_STREAM("Number of views to be registered transforms: "<<req.rgbd_views_odometry_transforms.size());
+
+    // check rgbd view data
+    if ((!req.rgbd_views.size())){
+        // no rgbd views, cannot register
+        ROS_ERROR_STREAM("rgbd_view_registration_service: no rgbd views provided. Cannot register.");
+        return true;
+    }
+
+    if ((req.rgbd_views_odometry_transforms.size() != 0) && (req.rgbd_views_odometry_transforms.size() != req.rgbd_views.size())){
+        ROS_ERROR_STREAM("rgbd_view_registration_service: the number of rgbd views provided differs from the number of odometry transforms. Will not use the odometry transforms");
+        return true;
+    }
+
+
+    // set up optimization data
+    vector<boost::shared_ptr<pcl::PointCloud<PointType>>> reference_views;
+    vector<tf::StampedTransform> reference_views_odometry_transforms;
+    vector<boost::shared_ptr<pcl::PointCloud<PointType>>> rgbd_views;
+    vector<tf::StampedTransform> rgbd_views_odometry_transforms;
+    vector<boost::shared_ptr<pcl::PointCloud<PointType>>> observation_intermediate_clouds;
+    vector<tf::StampedTransform> observation_intermediate_clouds_transforms;
+
+    // object optimization data
+    for (auto rgbd_view_msg : req.reference_views){
+        boost::shared_ptr<pcl::PointCloud<PointType>> ref_view ( new pcl::PointCloud<PointType>);
+        pcl::fromROSMsg(rgbd_view_msg, *ref_view);
+        reference_views.push_back(ref_view);
+    }
+
+    if ((req.reference_views_odometry_transforms.size() != 0) /*&& (req.rgbd_views_odometry_transforms.size() == req.rgbd_views.size())*/){
+        // get odometry transforms
+        for (auto odometry : req.reference_views_odometry_transforms){
+            tf::Transform view_transform;
+            tf::transformMsgToTF(odometry, view_transform);
+            tf::StampedTransform view_transform_stamped(view_transform, ros::Time::now(),"",""); // dummy values, not important
+            reference_views_odometry_transforms.push_back(view_transform_stamped);
+        }
+    }
+
+    for (auto rgbd_view_msg : req.rgbd_views){
+        boost::shared_ptr<pcl::PointCloud<PointType>> rgbd_view ( new pcl::PointCloud<PointType>);
+        pcl::fromROSMsg(rgbd_view_msg, *rgbd_view);
+        rgbd_views.push_back(rgbd_view);
+    }
+
+    if ((req.rgbd_views_odometry_transforms.size() != 0) /*&& (req.rgbd_views_odometry_transforms.size() == req.rgbd_views.size())*/){
+        // get odometry transforms
+        for (auto odometry : req.rgbd_views_odometry_transforms){
+            tf::Transform view_transform;
+            tf::transformMsgToTF(odometry, view_transform);
+            tf::StampedTransform view_transform_stamped(view_transform, ros::Time::now(),"",""); // dummy values, not important
+            rgbd_views_odometry_transforms.push_back(view_transform_stamped);
+        }
+    }
+
+    // pass data to the optimizer
+    std::vector<int> rgbd_view_constraints;
+    vector<tf::StampedTransform> rgbd_view_registered_transforms;
+
+    ROS_INFO_STREAM("Registering rgbd views ...");
+    optimizeWithReference(reference_views, reference_views_odometry_transforms,
+                          rgbd_views, rgbd_views_odometry_transforms,
+                          rgbd_view_constraints, rgbd_view_registered_transforms);
+
+    ROS_INFO_STREAM("DONE Registering rgbd views ...");
+    // return data
+    // constraint number
+    res.rgbd_view_correspondences.assign(rgbd_view_constraints.begin(), rgbd_view_constraints.end());
+
+    // rgbd view registered transforms
+    for (auto reg_tf : rgbd_view_registered_transforms){
+        geometry_msgs::Transform registered_transform_msg;
+        tf::transformTFToMsg(reg_tf, registered_transform_msg);
+        res.rgbd_view_transforms.push_back(registered_transform_msg);
+    }
+
+    // publish data (debug)
+    publishRegistrationResult(rgbd_views,
+                              rgbd_view_registered_transforms);
+
+    return true;
+}
+
 
 bool rgbd_view_registration_service(
         registration_services::RegistrationService::Request  &req,
@@ -37,10 +139,10 @@ bool rgbd_view_registration_service(
         return true;
     }
 
-    if ((req.rgbd_views_odometry_transforms.size() != 0) && (req.rgbd_views_odometry_transforms.size() != req.rgbd_views.size())){
-        ROS_ERROR_STREAM("rgbd_view_registration_service: the number of rgbd views provided differs from the number of odometry transforms. Will not use the odometry transforms");
-        return true;
-    }
+//    if ((req.rgbd_views_odometry_transforms.size() != 0) && (req.rgbd_views_odometry_transforms.size() != req.rgbd_views.size())){
+//        ROS_ERROR_STREAM("rgbd_view_registration_service: the number of rgbd views provided differs from the number of odometry transforms. Will not use the odometry transforms");
+//        return true;
+//    }
 
 
     // set up optimization data
@@ -56,7 +158,7 @@ bool rgbd_view_registration_service(
         rgbd_views.push_back(rgbd_view);
     }
 
-    if ((req.rgbd_views_odometry_transforms.size() != 0) && (req.rgbd_views_odometry_transforms.size() == req.rgbd_views.size())){
+    if ((req.rgbd_views_odometry_transforms.size() != 0) /*&& (req.rgbd_views_odometry_transforms.size() == req.rgbd_views.size())*/){
         // get odometry transforms
         for (auto odometry : req.rgbd_views_odometry_transforms){
             tf::Transform view_transform;
@@ -90,6 +192,30 @@ bool rgbd_view_registration_service(
     // publish data (debug)
     publishRegistrationResult(rgbd_views,
                               rgbd_view_registered_transforms);
+
+    return true;
+}
+
+bool optimizeWithReference(const vector<boost::shared_ptr<pcl::PointCloud<PointType>>>& reference_views,
+                           const vector<tf::StampedTransform>& reference_views_odometry_transforms,
+              const vector<boost::shared_ptr<pcl::PointCloud<PointType>>>& rgbd_views,
+              const vector<tf::StampedTransform>& rgbd_views_odometry_transforms,
+              std::vector<int>& rgbd_view_constraints,
+              vector<tf::StampedTransform>& rgbd_view_registered_transforms){
+
+    bool verbose = true;
+    vector<tf::Transform> registered_transforms;
+    RGBDViewRegistrationOptimizer optimizer(verbose);
+    optimizer.registerViewsWithReference<PointType>(reference_views,
+                                                    reference_views_odometry_transforms,
+                                                    rgbd_views,
+                                                    rgbd_views_odometry_transforms,
+                                                    rgbd_view_constraints,registered_transforms);
+    ROS_INFO_STREAM("Done optimizing ...");
+    for (auto tf : registered_transforms){
+        tf::StampedTransform tf_stamped(tf, ros::Time::now(),"", "");
+        rgbd_view_registered_transforms.push_back(tf_stamped);
+    }
 
     return true;
 }
@@ -150,6 +276,7 @@ int main(int argc, char **argv)
     ros::NodeHandle n;
 
     ros::ServiceServer service =  n.advertiseService("rgbd_view_registration_server", rgbd_view_registration_service);
+    ros::ServiceServer service2 =  n.advertiseService("rgbd_view_registration_server_with_reference", rgbd_view_registration_with_reference_service);
     pubRegistrationResult = n.advertise<sensor_msgs::PointCloud2>("/rgbd_view_registration/registered_view_cloud", 1);
 
     ROS_INFO("rgbd_view_registration_server started.");
