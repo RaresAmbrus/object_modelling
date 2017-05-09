@@ -53,3 +53,7 @@ add_executable(incremental_rgbd_view_registration test/incremental_rgbd_view_reg
 target_link_libraries(incremental_rgbd_view_registration ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${QT_LIBRARIES} ${CERES_LIBRARIES} rgbd_view_registration_optimizer)
 add_dependencies(incremental_rgbd_view_registration registration_services_gencpp)
 
+add_executable(segment_with_reference test/segment_with_reference.cpp)
+target_link_libraries(segment_with_reference ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${QT_LIBRARIES} ${CERES_LIBRARIES} rgbd_view_registration_optimizer)
+add_dependencies(segment_with_reference registration_services_gencpp)
+

@@ -42,7 +42,7 @@ int main(int argc, char** argv)
         reference_folder = argv[1];
         view_folder = argv[2];
     } else {
-        ROS_ERROR_STREAM("Please specify view folder and reference folder.");
+        ROS_ERROR_STREAM("Please specify reference folder and view folder.");
         return -1;
     }
 
@@ -190,22 +190,24 @@ int main(int argc, char** argv)
         pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> red(transformedCloud1, 255, 0, 0);
         pg->addPointCloud(transformedCloud1, red, ss.str());
 
+        // add registered pose and save
+        Eigen::Vector3d origin; tf::vectorTFToEigen(registered_transforms[i].getOrigin(), origin);
+        Eigen::Matrix3d basis; tf::matrixTFToEigen(registered_transforms[i].getBasis(), basis);
+        Eigen::Vector4f sensor_origin; sensor_origin(3) = 1.0;
+        sensor_origin.head<3>() = origin.cast<float>();
+        Eigen::Quaternionf sensor_basis(basis.cast<float>());
+        view_pcds[i]->sensor_origin_ = sensor_origin;
+        view_pcds[i]->sensor_orientation_ = sensor_basis;
+        pcl::io::savePCDFileBinaryCompressed(view_pcd_files[i],*view_pcds[i]);
+        ROS_INFO_STREAM("Saving registered transform for cloud "<<view_pcd_files[i]);
+
 
     }
 
     pg->spin();
     pg->removeAllPointClouds();
 
-//            // add registered pose and save
-//            Eigen::Vector3d origin; tf::vectorTFToEigen(registered_transforms[i].getOrigin(), origin);
-//            Eigen::Matrix3d basis; tf::matrixTFToEigen(registered_transforms[i].getBasis(), basis);
-//            Eigen::Vector4f sensor_origin; sensor_origin(3) = 1.0;
-//            sensor_origin.head<3>() = origin.cast<float>();
-//            Eigen::Quaternionf sensor_basis(basis.cast<float>());
-//            pcds[i]->sensor_origin_ = sensor_origin;
-//            pcds[i]->sensor_orientation_ = sensor_basis;
-//            pcl::io::savePCDFileBinaryCompressed(pcd_files[i],*pcds[i]);
-//            ROS_INFO_STREAM("Saving registered transform for cloud "<<pcd_files[i]);
+
 
 }
 

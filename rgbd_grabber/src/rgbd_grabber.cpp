@@ -61,7 +61,7 @@ int main(int argc, char **argv)
     ROS_INFO("rgbd_grabber initialized.");
 
     string pc_topic = "/camera/depth_registered/points";
-    string control_topic = "/teleop/keyinput";
+    string control_topic = "/snapshot/pointcloud";
 
     if (argc>1){
         output_folder = argv[1];
