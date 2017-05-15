@@ -144,6 +144,8 @@ int main(int argc, char** argv)
     CloudPtr subsampled(new Cloud);
 
     CloudPtr view_cloud  = rebuildCloud(view_pcds, view_transforms);
+    CloudPtr original_view_cloud  (new Cloud);
+    *original_view_cloud = *view_cloud;
     vg.setInputCloud (view_cloud);
     vg.filter (*subsampled);
     *view_cloud = *subsampled;
@@ -224,13 +226,13 @@ int main(int argc, char** argv)
 
 //    // REGION GROWING
 ////    CloudPtr new_view_cloud  = rebuildCloud(view_pcds, view_transforms);
-//    CloudPtr grown_cluster(new Cloud());
+    CloudPtr grown_cluster(new Cloud());
 //    std::vector<int> nn_indices;
 //    std::vector<float> nn_distances;
 //    std::vector<int> src_indices;
 //    typename pcl::search::KdTree<PointType>::Ptr tree2 (new pcl::search::KdTree<PointType>);
-//    tree2->setInputCloud (view_cloud);
-//    int search_radius = 0.05;
+//    tree2->setInputCloud (original_view_cloud);
+//    int search_radius = 0.1;
 
 //    // Iterate through the source data set
 //    for (int i = 0; i < static_cast<int> (best_cluster->points.size ()); ++i)
@@ -239,26 +241,48 @@ int main(int argc, char** argv)
 //            continue;
 //        // Search for the closest point in the target data set (number of neighbors to find = 1)
 
-////        if (!tree2->radiusSearch (best_cluster->points[i], search_radius, nn_indices, nn_distances))
-//        if (!tree->nearestKSearch (best_cluster->points[i], 10, nn_indices, nn_distances))
+//        if (!tree2->radiusSearch (best_cluster->points[i], search_radius, nn_indices, nn_distances))
+////        if (!tree2->nearestKSearch (best_cluster->points[i], 10, nn_indices, nn_distances))
 //        {
 //            PCL_WARN ("No neighbor found for point %zu (%f %f %f)!\n", i, best_cluster->points[i].x, best_cluster->points[i].y, best_cluster->points[i].z);
 //            continue;
 //        }
 
 //        for (int j=0; j<nn_indices.size(); ++j){
-//            grown_cluster->push_back(view_cloud->points[j]);
+//            grown_cluster->push_back(original_view_cloud->points[j]);
 //        }
 //    }
+
+    // DIFFERENCE TO GROW THE CLUSTER
+    {
+        pcl::SegmentDifferences<PointType> segment;
+        pcl::search::KdTree<PointType>::Ptr tree (new pcl::search::KdTree<PointType>);
+
+        segment.setInputCloud(original_view_cloud);
+        segment.setTargetCloud(best_cluster);
+        tree->setInputCloud (best_cluster);
+        segment.setDistanceThreshold(0.004);
+        CloudPtr view_without_cl(new Cloud);
+        segment.segment(*view_without_cl);
+
+        segment.setTargetCloud(view_without_cl);
+        tree->setInputCloud (view_without_cl);
+        segment.setDistanceThreshold(0.0005);
+        segment.segment(*grown_cluster);
+    }
 
     // VISUALIZE GROWN CLUSTER
 
     {
-        pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> blue(best_cluster, 0, 0, 255);
-        pg->addPointCloud(best_cluster, blue, "view_cloud");
 
-//        pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> red(grown_cluster, 255, 0, 0);
-//        pg->addPointCloud(grown_cluster, red, "reference_cloud");
+        pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> green(original_view_cloud, 0, 255, 0);
+        pg->addPointCloud(original_view_cloud, green, "view_cloud");
+
+        pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> blue(best_cluster, 0, 0, 255);
+        pg->addPointCloud(best_cluster, blue, "best_cluster");
+
+        pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> red(grown_cluster, 255, 0, 0);
+        pg->addPointCloud(grown_cluster, red, "grown_cluster");
 
         pg->spin();
         pg->removeAllPointClouds();
@@ -266,7 +290,7 @@ int main(int argc, char** argv)
 
     // save best cluster
     string best_cl_path = view_folder + "/best_cluster.pcd";
-    pcl::io::savePCDFileBinaryCompressed(best_cl_path,*best_cluster);
+    pcl::io::savePCDFileBinaryCompressed(best_cl_path,*grown_cluster);
 
 
 
